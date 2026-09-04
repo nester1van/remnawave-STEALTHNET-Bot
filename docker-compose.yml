@@ -63,7 +63,10 @@ services:
       INIT_ADMIN_PASSWORD: "${INIT_ADMIN_PASSWORD:-}"
       BOT_TOKEN: "${BOT_TOKEN:-}"
     volumes:
-      - /etc/ssh:/host-etc/ssh
+      # VPN on Go: /etc/ssh хоста больше не монтируем. Через него админка умела
+      # править sshd_config, то есть компрометация веб-панели давала переписать
+      # SSH-конфигурацию хоста. Раздел «Server → SSH» в админке перестаёт
+      # работать — он нам не нужен, управление сервером идёт не через биллинг.
       - /proc:/host-proc:ro
       - uploads_data:/app/uploads
       # Бэкапы БД — ОБЯЗАТЕЛЬНО на томе: без него /app/backups живёт
@@ -81,7 +84,9 @@ services:
       # с сервера» → «Подмёрж новые» → «Сохранить». Без перезапуска контейнера.
       # Read-only: контейнер не должен модифицировать конфиг.
       - ./backend/subpage-00000000-0000-0000-0000-000000000000.json:/app/subpage-00000000-0000-0000-0000-000000000000.json:ro
-    pid: host
+    # VPN on Go: pid: host убран. Контейнер биллинга видел пространство
+    # процессов хоста целиком; для метрик достаточно /host-proc, смонтированного
+    # только на чтение.
     depends_on:
       postgres:
         condition: service_healthy
@@ -195,7 +200,14 @@ services:
     networks:
       - stealthnet
 
+  # VPN on Go: консоль убрана в профиль и по умолчанию не поднимается.
+  # Она работает с network_mode: host, слушает SSH на хосте, а пароль к ней
+  # апстрим хранит в system_settings ОТКРЫТЫМ ТЕКСТОМ (ключ console_password).
+  # Управление сервером через биллинг нам не нужно. Кому нужно —
+  # docker compose --profile console up -d
   console:
+    profiles:
+      - console
     build: ./console
     image: stealthnet-console
     container_name: stealthnet-console
